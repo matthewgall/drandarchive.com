@@ -13,7 +13,6 @@ def backfill():
         log.debug("Processing round: {}".format(i))
         get_round(i)
 
-
 def get_round(i):
     try:
         r = requests.get('https://{}/public/{}'.format(args.drand, i), timeout=2).json()
@@ -33,16 +32,45 @@ def get_latest_round():
     except:
         return None
 
+def sendto_cf(d):
+    try:
+        r = requests.put(
+            "https://api.cloudflare.com/client/v4/accounts/{}/storage/kv/namespaces/{}/values/{}".format(
+                args.cf_account,
+                args.cf_namespace,
+                "{}.{}".format(args.drand.replace(".", ""), d['round'])
+            ),
+            headers={
+                'Authorization': "Bearer {}".format(args.cf_token)
+            },
+            data=json.dumps(d)
+        )
+        print(r.json())
+    except:
+        return None
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
     # drand server
-    parser.add_argument("-d", "--drand", help="drand server to archive", default="drand.cloudflare.com")
+    parser.add_argument("-d", "--drand", help="drand server to archive", default=os.getenv("DRAND_SERVER", "drand.cloudflare.com"))
 
     # modes
     parser.add_argument("-b", "--backfill", help="backfill workers KV with the results of all rounds", action="store_true")
     parser.add_argument("-sv", "--server", help="run a server to update the archive as live", action="store_true")
+
+    # config
+    parser.add_argument("-dl", "--delay", help="pause between each check", default=os.getenv("DELAY", "5"))
+
+    # storage
+    ## cloudflare (workers kv)
+    parser.add_argument("--cf", help="store data using Cloudflare Workers KV", action="store_true")
+    parser.add_argument("--cf-account", help="cloudflare account id", default=os.getenv("CLOUDFLARE_ACCOUNT", ""))
+    parser.add_argument("--cf-token", help="cloudflare api token", default=os.getenv("CLOUDFLARE_TOKEN", ""))
+    parser.add_argument("--cf-namespace", help="cloudflare kv namespace", default=os.getenv("CLOUDFLARE_NAMESPACE", ""))
+
+    ## s3
 
     # Verbose mode
     parser.add_argument("--verbose", "-v", help="increase output verbosity", action="store_true")
@@ -73,11 +101,13 @@ if __name__ == '__main__':
                 d = get_round(r)
 
                 # Publish it
-
+                if args.cf:
+                    sendto_cf(d)
+                
                 # Update the pointer
                 l = d['round']
             else:
                 log.info("Round has not proceeded yet, still at round {}".format(r))
 
             # And wait for the next round
-            time.sleep(3)
+            time.sleep(int(args.delay))
