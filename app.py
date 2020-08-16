@@ -8,19 +8,38 @@ def backfill():
     latest = get_latest_round()
 
     # Now, we get the range of all rounds from 0
-    ranges = range(0, latest)
+    ranges = range(1, latest)
     for i in ranges:
-        log.debug("Processing round: {}".format(i))
-        get_round(i)
+        log.info("Processing round: {}".format(i))
+        
+        # Download the round
+        d = get_round(i)
+        
+        # Publish it, but only for a non-error state
+        if d != None:
+            if args.cf:
+                sendto_cf(d)
+            
+            # Update the pointer
+            l = d['round']
+        else:
+            log.info("Error downloading round {}. Attempting again in {} seconds".format(r, args.delay))
+        
+        # And wait for the next round
+        time.sleep(int(args.delay))
 
 def get_round(i):
     try:
-        r = requests.get('https://{}/public/{}'.format(args.drand, i), timeout=2).json()
+        r = requests.get('https://{}/public/{}'.format(args.drand, i), timeout=2)
         
-        if r['round'] == i:
-            return r
+        if r.status_code == 200:
+            r = r.json()
+            if r['round'] == i:
+                return r
+            else:
+                log.debug("{} did not match the expected output, this round may not exist".format(i))
+                return None
         else:
-            log.debug("{} did not match the expected output, this round may not exist".format(i))
             return None
     except requests.exceptions.ReadTimeout:
         return None
@@ -45,7 +64,6 @@ def sendto_cf(d):
             },
             data=json.dumps(d)
         )
-        print(r.json())
     except:
         return None
 
@@ -100,12 +118,15 @@ if __name__ == '__main__':
                 # Download it
                 d = get_round(r)
 
-                # Publish it
-                if args.cf:
-                    sendto_cf(d)
-                
-                # Update the pointer
-                l = d['round']
+                # Publish it, but only for a non-error state
+                if d != None:
+                    if args.cf:
+                        sendto_cf(d)
+                    
+                    # Update the pointer
+                    l = d['round']
+                else:
+                    log.info("Error downloading round {}. Attempting again in {} seconds".format(r, args.delay))
             else:
                 log.info("Round has not proceeded yet, still at round {}".format(r))
 
