@@ -3,42 +3,6 @@ kind: Namespace
 metadata:
   name: ${NAMESPACE}
 ---
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: ${NAME}-drandcloudflarecom-backfill
-  labels:
-    app: ${NAME}-drandcloudflarecom-backfill
-spec:
-  template:
-    spec:
-      containers:
-      - name: ${NAME}-drandcloudflarecom-backfill
-        image: matthewgall/drandarchive:latest
-        args: ["--backfill", "--cf"]
-        env:
-          - name: DRAND_SERVER
-            value: drand.cloudflare.com
-          - name: DELAY
-            value: "120"
-          - name: CLOUDFLARE_ACCOUNT
-            valueFrom:
-              secretKeyRef:
-                name: ${NAME}-secrets
-                key: cf-account
-          - name: CLOUDFLARE_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: ${NAME}-secrets
-                key: cf-token
-          - name: CLOUDFLARE_NAMESPACE
-            valueFrom:
-              secretKeyRef:
-                name: ${NAME}-secrets
-                key: cf-namespace
-      restartPolicy: Never
-  backoffLimit: 4
---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -57,8 +21,8 @@ spec:
     spec:
       containers:
       - name: ${NAME}-drandcloudflarecom-server
-        image: matthewgall/drandarchive.com:latest
-        args: ["--sv", "--cf"]
+        image: matthewgall/drandarchive.com:edge
+        args: ["python3", "/app/app.py", "-sv", "--cf"]
         env:
           - name: DRAND_SERVER
             value: drand.cloudflare.com
